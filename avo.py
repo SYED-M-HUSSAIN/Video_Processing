@@ -1,12 +1,19 @@
 import cv2
 import numpy as np
 
-# Define region of interest (ROI) coordinates
-roi_x1, roi_y1 = 100, 100  # Top-left corner
-roi_x2, roi_y2 = 400, 400  # Bottom-right corner
+# Function to draw a triangular region at the bottom of the frame
+def draw_triangle(frame):
+    # Define vertices of the triangle
+    vertices = np.array([[100, frame.shape[0]], [frame.shape[1] // 2, frame.shape[0] // 2 + 50], [frame.shape[1] - 100, frame.shape[0]]], np.int32)
+    vertices = vertices.reshape((-1, 1, 2))
 
-# Function to perform obstacle detection within the ROI
-def detect_obstacles(frame):
+    # Draw the triangle on the frame
+    cv2.polylines(frame, [vertices], isClosed=True, color=(255, 0, 0), thickness=2)
+
+    return vertices
+
+# Function to perform obstacle detection within the triangular region
+def detect_obstacles(frame, vertices):
     # Convert frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -16,14 +23,15 @@ def detect_obstacles(frame):
     # Perform edge detection
     edges = cv2.Canny(blurred, 50, 150)
 
-    # Draw lines to define ROI
-    cv2.rectangle(frame, (roi_x1, roi_y1), (roi_x2, roi_y2), (255, 0, 0), 2)
+    # Define a mask for the triangular region
+    mask = np.zeros_like(edges)
+    cv2.fillPoly(mask, [vertices], 255)
 
-    # Define ROI
-    roi = edges[roi_y1:roi_y2, roi_x1:roi_x2]
+    # Bitwise AND operation to mask out the triangular region
+    masked_edges = cv2.bitwise_and(edges, mask)
 
-    # Find contours in the ROI
-    contours, _ = cv2.findContours(roi.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Find contours in the masked edges
+    contours, _ = cv2.findContours(masked_edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Initialize number of obstacles
     num_obstacles = 0
@@ -41,7 +49,7 @@ def detect_obstacles(frame):
         num_obstacles += 1
 
         # Draw contour
-        cv2.drawContours(frame[roi_y1:roi_y2, roi_x1:roi_x2], [contour], -1, (0, 255, 0), 2)
+        cv2.drawContours(frame, [contour], -1, (0, 255, 0), 2)
 
     return frame, num_obstacles
 
@@ -49,9 +57,9 @@ def detect_obstacles(frame):
 def avoid_obstacles(num_obstacles):
     # Dummy avoidance logic
     if num_obstacles > 0:
-        print("Obstacle detected within the ROI! Stop the robot and change direction.")
+        print("Obstacle detected within the triangular region! Stop the robot and change direction.")
     else:
-        print("No obstacles detected within the ROI. Proceeding.")
+        print("No obstacles detected within the triangular region. Proceeding.")
 
 # Main function
 def main():
@@ -66,14 +74,17 @@ def main():
             print("Error: Unable to capture frame")
             break
 
-        # Perform obstacle detection within the ROI
-        processed_frame, num_obstacles = detect_obstacles(frame)
+        # Draw a triangular region at the bottom of the frame
+        vertices = draw_triangle(frame)
+
+        # Perform obstacle detection within the triangular region
+        processed_frame, num_obstacles = detect_obstacles(frame, vertices)
 
         # Perform obstacle avoidance
         avoid_obstacles(num_obstacles)
 
         # Display the processed frame
-        cv2.imshow('Obstacle Detection within ROI', processed_frame)
+        cv2.imshow('Obstacle Detection within Triangular Region', processed_frame)
 
         # Exit if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
